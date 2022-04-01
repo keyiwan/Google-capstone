@@ -58,9 +58,9 @@ dt_2112 <- read_csv("202112-divvy-tripdata.csv", na = "")
 
 **2. Merging multiple tables**  
 
-Before combining tables into a single data frame, we need to observe components of each table, specifically column names of each file, in order to make merge compatible.
+Before combining tables into a single data frame, I need to observe components of each table, specifically column names of each file, in order to make merge compatible.
 
-Following code chunk displays some techniques we may use when dealing with this issue.
+Following code chunk displays some useful techniques when dealing with this issue.
 
 ```{r merge method, eval=FALSE}
 # check column names, for they need to match perfectly before we can combine files by rows
@@ -98,7 +98,7 @@ To check duplicates, `distinct()` is used to check duplicates based on all of co
 dt_all <- dt_all %>% 
   distinct()
 # distinct(ride_id, .keep_all = TRUE), based on ride_id alone
-## result in no duplicates removed
+## no duplicates removed
 nrow_old <- nrow(dt_all)
 ```
 
@@ -134,9 +134,10 @@ However, manually fixing the problem of station names is not essential to answer
 dup_id <- dt_all %>% 
   count(start_station_id, start_station_name) %>% 
   filter(duplicated(start_station_id)) %>% 
-  select(start_station_id)
+  select(start_station_id) # return ids appearing more than once
 
-dup_id <- unlist(as.list(dup_id)) ## as.vector returns 
+dup_id <- unlist(as.list(dup_id)) # transform tibble into list first then to vector as `as.vector()` not applicable 
+
 dt_all %>% 
   count(start_station_id, start_station_name) %>% 
   filter(start_station_id %in% dup_id)
@@ -144,16 +145,16 @@ dt_all %>%
 
 **4. Dates**  
 
-Addressing `date` columns is necessary for analysing the dynamics of rides on different time frames. With each ride record contains the exact time points for start and end, we can come up with a more meaningful metric - ride length - a calculated field using difference between columns `ended_at` and `started_at`.
+Addressing `date` columns is necessary for analysing the dynamics of rides on different time frames. With each ride record contains the exact time points for start and end, this analysis can come up with a more meaningful metric - ride length - a calculated field using the difference between columns `ended_at` and `started_at`.
 
-```{r date formatting}
+```{r date_formatting}
 dt_all <- dt_all %>% 
   mutate(started_at = ymd_hms(started_at),
          ended_at = ymd_hms(ended_at),
          ride_length = ended_at - started_at) # figures in seconds, difftime is an alternative function
 ```
 
-```{r drill-date, eval=FALSE, echo=FALSE}
+```{r drill_date, eval=FALSE, echo=FALSE}
 dt_all %>% 
   mutate(ride_length = ended_at - started_at,
          start_day = mday(started_at),
@@ -171,18 +172,27 @@ dt_all <- dt_all %>%
 
 Dissect `date` by year, month, day and weekday.  
 
-The reason is that data can only be aggregated at the ride-level, which is too granular based on original date formats. So we will want to add some additional columns of data -- such as day, month, year, weekday -- that provide additional opportunities to aggregate the data.
+The reason is that data can only be aggregated at the ride-level, which is too granular based on original date formats. So I will add some additional columns of data -- such as day, month, year, weekday -- that provide additional opportunities to aggregate the data.
 
 ```{r dissect date}
 dt_all <- dt_all %>% 
-  mutate(start_year = year(started_at), end_year = year(ended_at), start_month = month(started_at), end_month = month(ended_at), start_Month = month(started_at, label = TRUE), end_Month = month(ended_at, label = TRUE), start_day = mday(started_at), end_day = mday(ended_at), start_wday = wday(started_at, label = TRUE), end_wday = wday(ended_at, label = TRUE))
+  mutate(start_year = year(started_at), 
+         end_year = year(ended_at), 
+         start_month = month(started_at), # month as number
+         end_month = month(ended_at),
+         start_Month = month(started_at, label = TRUE), # months as Jan, Feb 
+         end_Month = month(ended_at, label = TRUE), 
+         start_day = mday(started_at), # day of month
+         end_day = mday(ended_at), 
+         start_wday = wday(started_at, label = TRUE), # day of week
+         end_wday = wday(ended_at, label = TRUE))
 ```
 
 **5. Remove "bad" data**  
 
-Despite no clear definition of "bad" data, here we need to spot data that takes only a small number while having values that can disproportionately influence our findings and at times delete them.
+Despite no clear definition of "bad" data, here I need to spot data that takes only a small number while having values that can disproportionately influence our findings ,and then sometimes delete them.
 
-In this case, we consider getting rid of extremely large and negative values in `ride_length` since they make no practical sense for the majority of users and can distort data distribution, but how to address outliers is in fact a case-by-case puzzle.
+In this case, I will remove extremely large and negative values in `ride_length` since they make no practical sense for the majority of users and can distort data distribution, but how to address outliers is a case-by-case study.
 
 Specifically, records for trips less than 60 seconds (false starts) or longer than 24 hours were removed. Bikes out longer than 24 hours are considered stolen and the rider is charged for a replacement. Idea inspired from: <https://vibrantoutlook.wordpress.com/2021/09/19/google-data-analytics-certificate-capstone-project/>
 
@@ -190,14 +200,16 @@ Specifically, records for trips less than 60 seconds (false starts) or longer th
 dt_all02 <- dt_all %>% 
   filter(end_day - start_day < 2 & 
            between(ride_length_m, 1, 1440))
-## filter rides spanning across within 2 days while not lasting above 24 hours/ 1440 minutes, 1 for filtering out negative results and false starts
+# filter rides spanning across within 2 days 
+# while not lasting above 24 hours/ 1440 minutes, 
+# above 1 for filtering out negative results and false starts
 ```
 
 `r format(nrow_new - nrow(dt_all02), big.mark=",", scientific=FALSE)` records removed.
 
 Meanwhile, rides that started or ended at DIVVY CASSETTE *REPAIR* MOBILE STATION or HUBBARD ST BIKE *CHECKING* (LBS-WH-TEST)  or WATSON *TESTING* DIVVY could be ignored as these are administrative stations. were removed as these are administrative stations. (Link for reference: <https://vibrantoutlook.wordpress.com/2021/09/19/google-data-analytics-certificate-capstone-project/>)  
 
-For simplicity, I use `str_detect()` to find matches containing any characters of `REPAIR`, `TESTING` or `CHECKING`.
+For brevity, I use `str_detect()` to find matches containing any characters of `REPAIR`, `TESTING` or `CHECKING`.
 
 ```{r testing, eval=FALSE, echo=FALSE}
 ## this code chunk is used for experimenting
@@ -218,6 +230,7 @@ station_name %>%
 ```
 
 ```{r repair}
+# find matches
 dt_all02 %>% 
   filter(str_detect(start_station_name, "REPAIR|TESTING|CHECKING") | str_detect(end_station_name, "REPAIR|TESTING|CHECKING")) %>% 
   select(ride_id, start_station_id, end_station_id)
@@ -226,11 +239,13 @@ dt_all02 %>%
 8 records detected to be removed.
 
 ```{r nonrepair}
+# remove matches
 dt_all02 <- dt_all02 %>% 
   filter(!str_detect(start_station_name, "REPAIR|TESTING|CHECKING") & !str_detect(end_station_name, "REPAIR|TESTING|CHECKING")) # !(A | B) == !A & !B
 ```
 
 At the end of data cleaning, `r format(old_records-nrow(dt_all02), big.mark = ",", scientific = FALSE)` rows have been deleted, accounting for `r paste0((round((old_records-nrow(dt_all02))/old_records, digits=2))*100, "%")` of original data size.
+
 
 ## Analyse
 
@@ -242,9 +257,9 @@ Here comes the first question: How many observations fall under each user type?
 ```
 As shown above, more than `r dt_all_freq[2,2]-dt_all_freq[1,2]` rides were by members than casual riders in the whole time period.
 
-Then, we conduct descriptive analysis on ride length. Asking questions like:  
+Then, I conduct descriptive analysis on **ride length**, answering questions like:  
 
-> Is there a difference on average ride lengths among the two user groups?  
+> Is there a difference on total/average ride lengths among the two user groups?  
 > How is that difference varied on monthly/daily level?
 
 **1. Total ride lengths**  
@@ -255,12 +270,15 @@ Let's have a look at the total, average, median, minimum and maximum.
 dt_all02 %>% 
   group_by(member_casual) %>% 
   summarise(number_of_rides = n(),
-    total_length = sum(ride_length_m), mean_length = mean(ride_length_m),
-    median_length = median(ride_length_m), max_length = max(ride_length_m), min_length = min(ride_length_m))
+            total_length = sum(ride_length_m), 
+            mean_length = mean(ride_length_m),
+            median_length = median(ride_length_m), 
+            max_length = max(ride_length_m), 
+            min_length = min(ride_length_m))
 ```
-More rides taken by members while casual riders contribute to nearly double the size of the total length of members during the same time period.  
+Overall, more rides were taken by members while casual riders enjoyed longer trips, contributing nearly double the total ride length of members' during the same time period.  
 
-The average length of each ride by casual riders is  around `r dt_all02 %>% filter(member_casual=='casual') %>% summarise(mean_length_casual=mean(ride_length_m)) %>% round(digits=1)` minutes, more than double of the `r dt_all02 %>% filter(member_casual=='member') %>% summarise(mean_length_member=mean(ride_length_m)) %>% round(digits=1)` minutes for annual members.
+The average duration of each ride by casual riders is around `r dt_all02 %>% filter(member_casual=='casual') %>% summarise(mean_length_casual=mean(ride_length_m)) %>% round(digits=1)` minutes, two times more of the `r dt_all02 %>% filter(member_casual=='member') %>% summarise(mean_length_member=mean(ride_length_m)) %>% round(digits=1)` minutes for annual members.
 
 
 **2. Ride length by month**
@@ -268,38 +286,43 @@ The average length of each ride by casual riders is  around `r dt_all02 %>% filt
 ```{r month}
 dt_all02 %>% 
   group_by(member_casual, start_Month) %>% 
-  summarise(sum_length_m = sum(ride_length_m), mean_length_m = mean(ride_length_m)) %>% 
+  summarise(sum_length_m = sum(ride_length_m), 
+            mean_length_m = mean(ride_length_m)) %>%
   arrange(member_casual, start_Month) %>% 
   head(12)
 ```
 
-It seems like the second quarter (April, May & June) to be a period that experiences relatively longer duration of rides by casual riders.
+It seems like the second quarter (April, May & June) to be a period that has experienced relatively longer duration of rides by casual riders.
 
 
-**3. Which day of a week induces most traffic**
+**3. Which day of a week induced most traffic**
 
-See the average ride time by each day for all users.
+See the number of trips and average ride duration on each day of a week for all users.
 ```{r weekday}
 dt_all02 %>% 
   group_by(start_wday) %>% 
-  summarise(number_of_rides = n(), total_length = sum(ride_length_m), mean_length = mean(ride_length_m))
+  summarise(number_of_rides = n(), 
+            total_length = sum(ride_length_m), 
+            mean_length = mean(ride_length_m))
 ```
 
-Compare ridership, average tide time by weekday for members vs casual riders.
+Compare ridership, average ride length by weekday for members vs casual riders.
 
 ```{r weekday_type}
 dt_all02 %>% 
   group_by(member_casual, start_wday) %>% 
-  summarise(number_of_rides = n(), total_length = sum(ride_length_m), mean_length = mean(ride_length_m)) %>% 
+  summarise(number_of_rides = n(), 
+            total_length = sum(ride_length_m), 
+            mean_length = mean(ride_length_m)) %>% 
   arrange(member_casual, start_wday) 
 ```
 
-Regardless of the user type, weekends enjoy peak usage without doubt, which can potentially steer us in terms of resources allocation of advertising. 
+Regardless of the user type, weekends undoubtedly enjoyed peak usage, which can possibly guide us in deciding marketing times.  
 
 
 **4. Top 10 busiest stations**
 
-To better market membership of Divvy, hence attracting more casual riders to subscribe as members, stations mostly visited by casual users may be a great option as future campaign locations.
+To better market membership of Divvy, hence attracting more casual riders to subscribe as members, stations mostly visited by casual users may be a great choice as locations for the upcoming campaign.
 
 ```{r hotspot01}
 dt_all02 %>% 
@@ -311,7 +334,7 @@ dt_all02 %>%
   head(10)
 ```
 
-Is there any difference in station preference between casual riders and annual members?
+Is there any difference on station preference between casual riders and annual members?
 
 ```{r hotspot02}
 dt_all02 %>% 
@@ -336,6 +359,47 @@ dt_all02 %>%
 
 As shown above, there is undeniably a distinct difference on stations choices made by members and casual riders.
 
+Even though I think sticking to station id is easier, but for map viz, names of locations are better for presentation. Since I will focus on mainly the top 10 stations most visited by casual riders for past 12 months, only two ids in the top 10 list that also appears in the duplicated list before: `13300` and `LF-005`. So I will fix the names of stations belonging to those two ids.
+
+It turns out, recently [Chicago's iconic Lake Shore Drive has been renamed in honor of Jean Baptiste Point DuSable](https://blockclubchicago.org/2021/10/21/lake-shore-drive-signs-now-have-its-new-name-dusable-lake-shore-drive-honoring-citys-black-founder/), so the `Lake Shore Dr` in the data set has been renamed `DuSable Lake Shore Dr` shown in more recent records. And luckily, both cases of duplicates are due to the same reason. Then I will just update the station names accordingly.
+
+```{r renaming1}
+dt_all02 %>% 
+  count(start_station_id, start_station_name) %>% 
+  filter(start_station_id %in% c("13300", "LF-005"))
+```
+
+```{r renaming2}
+dt_all02 <- dt_all02 %>% 
+  mutate(start_station_name = case_when(
+    start_station_id == "13300" ~ "DuSable Lake Shore Dr & Monroe St",
+    start_station_id == "LF-005" ~ "DuSable Lake Shore Dr & North Blvd",
+    TRUE ~ start_station_name
+  ))
+```
+
+Now, test with updated station names.
+
+```{r test_name1}
+dt_all02 %>% 
+  filter(member_casual == "casual") %>% 
+  group_by(start_station_id) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  select(start_station_id, n) %>% 
+  head(10)
+```
+
+```{r test_name2}
+dt_all02 %>% 
+  filter(member_casual == "casual") %>% 
+  group_by(start_station_name) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  select(start_station_name, n) %>% 
+  head(10)
+```
+
 
 **5. The proportion of casual riders and annual members for each station**
 
@@ -357,11 +421,43 @@ In result, the list of 10 stations boasting far more visits from casual riders t
 
 ## Share  
 
-It is time to visualise our findings in order to share our report in a more vivid and engaging way.
+It is time to visualise our findings to vividly demonstrate differences on riding patterns between different rider types.  
 
 **1. Members ride more often than non-members**  
 
-Look at the stacked bar graph below, demonstrating the discrepancy on number of rides by rider type.
+Look at the pie chart below, showing the discrepancy on numbers of rides by rider type.
+
+
+```{r pie_trips1}
+library(scales)
+dt_all02 %>% 
+  group_by(member_casual) %>% 
+  count() %>% 
+  ungroup() %>% 
+  ggplot(aes(x = "", y = n, fill = member_casual))+
+  geom_col()+
+  geom_text(aes(label = member_casual), position = position_stack(vjust = 0.5)) +
+  labs(title = "Number of Trips by Rider Type")+
+  guides(fill = guide_legend(title = "Rider Type"))+
+  coord_polar("y")
+```
+
+```{r pie_trips2}
+dt_all02 %>% 
+  group_by(member_casual) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = n/sum(n)) %>% 
+  mutate(labels = scales::percent(perc)) %>% 
+  ggplot(aes(x = "", y = perc, fill = member_casual))+
+  geom_col()+
+  geom_text(aes(label = labels), position = position_stack(vjust = 0.5)) +
+  labs(title = "Number of Trips by Rider Type")+
+  guides(fill = guide_legend(title = "Rider Type"))+
+  coord_polar("y")
+```
+
+
 
 ```{r rides_bar, echo=FALSE}
 dt_all02 %>% 
