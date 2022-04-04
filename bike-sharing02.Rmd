@@ -1,0 +1,263 @@
+---
+title: "Google Data Analytics Certificate - Bike Share Case Study - Part2"
+author: "K.Wan"
+date: "2022/4/4"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+Sys.setlocale("LC_ALL",  "English") ## language set
+```
+
+```{r loading packages, warning=FALSE, message=FALSE}
+# install.packages("tidyverse")
+# install.packages("lubridate")
+
+library(tidyverse) # data import and tidy
+library(lubridate) # functions set for date, time
+library(ggplot2) # helps visualise data
+```
+
+## Analyse
+
+```{r data_import, results='hide', message=FALSE}
+dt_all02 <- read_csv("cleaned_data.csv")
+```
+
+Here comes the first question: How many observations fall under each user type?
+
+```{r category check}
+(dt_all_freq <- dt_all02 %>% 
+  count(member_casual))
+```
+As shown above, more than `r format((dt_all_freq[2,2]-dt_all_freq[1,2]), big.mark = ",", scientific = FALSE)` rides were by members than casual riders in the whole time period. 
+
+Then, I conduct descriptive analysis on **ride length**, answering questions like:  
+
+> Is there a difference on total/average ride lengths among the two user groups?   
+> How is that difference varied on monthly/daily level?
+
+
+**1. Total ride lengths**   
+
+Let's have a look at the total, average, median, minimum and maximum. 
+
+```{r total_length} 
+ dt_all02 %>%  
+   group_by(member_casual) %>%  
+   summarise(number_of_rides = n(), 
+             total_length = sum(ride_length_m),  
+             mean_length = mean(ride_length_m), 
+             median_length = median(ride_length_m),  
+             max_length = max(ride_length_m),  
+             min_length = min(ride_length_m)) 
+``` 
+
+Overall, more rides were taken by members while casual riders enjoyed longer trips, contributing nearly double the total ride length of members' during the same time period.   
+
+The average duration of each ride by casual riders is around `r dt_all02 %>% filter(member_casual=='casual') %>% summarise(mean_length_casual=mean(ride_length_m)) %>% round(digits=1)` minutes, two times more of the `r dt_all02 %>% filter(member_casual=='member') %>% summarise(mean_length_member=mean(ride_length_m)) %>% round(digits=1)` minutes for annual members.
+
+
+**2. Ride length by month** 
+
+```{r month} 
+ dt_all02 %>%  
+   group_by(member_casual, start_Month) %>%  
+   summarise(sum_length_m = sum(ride_length_m),  
+             mean_length_m = mean(ride_length_m)) %>% 
+   arrange(member_casual, start_Month) %>%  
+   head(12) 
+``` 
+
+ It seems like the second quarter (April, May & June) to be a period that has experienced relatively longer duration of rides by casual riders. 
+
+**3. Which day of a week induced most traffic** 
+
+See the number of trips and average ride duration on each day of a week for all users. 
+
+```{r weekday} 
+ dt_all02 %>%  
+   group_by(start_wday) %>%  
+   summarise(number_of_rides = n(),  
+             total_length = sum(ride_length_m),  
+             mean_length = mean(ride_length_m)) 
+``` 
+
+Compare ridership, average ride length by weekday for members vs casual riders. 
+
+```{r weekday_type} 
+ dt_all02 %>%  
+   group_by(member_casual, start_wday) %>%  
+   summarise(number_of_rides = n(),  
+             total_length = sum(ride_length_m),  
+             mean_length = mean(ride_length_m)) %>%  
+   arrange(member_casual, start_wday)  
+``` 
+
+Regardless of the user type, weekends undoubtedly enjoyed peak usage, which can possibly guide us in deciding marketing times.  
+
+
+**4. Top 10 busiest stations** 
+
+To better market membership of Divvy, hence attracting more casual riders to subscribe as members, stations mostly visited by casual users may be a great choice as locations for the upcoming campaign. 
+
+```{r hotspot01} 
+dt_all02 %>%  
+   filter(member_casual == "casual") %>%  
+   group_by(start_station_id) %>%  
+   summarise(n = n()) %>%  
+   arrange(desc(n)) %>%  
+   select(start_station_id, n) %>%  
+   head(10) 
+``` 
+
+Is there any difference on station preference between casual riders and annual members?
+
+```{r hotspot02}
+dt_all02 %>% 
+  filter(member_casual == "member") %>% 
+  group_by(start_station_id) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  select(start_station_id, n) %>% 
+  head(10)
+```
+
+Overall, which stations can reach out to most users regardless of user type.
+
+```{r hotspot03}
+dt_all02 %>% 
+  group_by(start_station_id) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  select(start_station_id, n) %>% 
+  head(10)
+```
+
+
+As shown above, there is undeniably a distinct difference on stations choices made by members and casual riders.
+
+Even though I think sticking to station id is easier, but for map viz, names of locations are better for presentation. Since I will focus on mainly the top 10 stations most visited by casual riders for past 12 months, only two ids in the top 10 list that also appears in the duplicated list before: `13300` and `LF-005`. So I will fix the names of stations belonging to those two ids.
+
+It turns out, recently [Chicago's iconic Lake Shore Drive has been renamed in honor of Jean Baptiste Point DuSable](https://blockclubchicago.org/2021/10/21/lake-shore-drive-signs-now-have-its-new-name-dusable-lake-shore-drive-honoring-citys-black-founder/), so the `Lake Shore Dr` in the data set has been renamed `DuSable Lake Shore Dr` shown in more recent records. And luckily, both cases of duplicates are due to the same reason. Then I will just update the station names accordingly.
+
+```{r renaming1}
+dt_all02 %>% 
+  count(start_station_id, start_station_name) %>% 
+  filter(start_station_id %in% c("13300", "LF-005"))
+```
+
+```{r renaming2}
+dt_all02 <- dt_all02 %>% 
+  mutate(start_station_name = case_when(
+    start_station_id == "13300" ~ "DuSable Lake Shore Dr & Monroe St",
+    start_station_id == "LF-005" ~ "DuSable Lake Shore Dr & North Blvd",
+    TRUE ~ start_station_name
+  ))
+```
+
+Now, test with updated station names.
+
+```{r test_name1}
+dt_all02 %>% 
+  filter(member_casual == "casual") %>% 
+  group_by(start_station_id) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  select(start_station_id, n) %>% 
+  head(10)
+```
+
+```{r test_name2}
+dt_all02 %>% 
+  filter(member_casual == "casual") %>% 
+  group_by(start_station_name) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  select(start_station_name, n) %>% 
+  head(10)
+```
+
+
+**5. The proportion of casual riders and annual members for each station**
+
+I want to produce a table with each row representing a unique station id, columns involving number of rides by members, by casual riders, and their individual proportion of total number of rides.
+
+```{r proportion}
+(prop_dt <- dt_all02 %>% 
+  group_by(start_station_id, member_casual) %>% 
+  summarise(n = n()))
+```
+
+This tibble having multiple values stacked in a small number of columns needs the function `pivot_wider` to make it wider.
+
+```{r pivot_wider}
+prop_dt %>% 
+  pivot_wider(names_from = member_casual, values_from = n) %>% 
+  mutate(total = casual + member, casual_freq = casual/total, member_freq = member/total) %>% 
+  arrange(desc(casual))
+```
+
+In result, the list of 10 stations boasting far more visits from casual riders than members is the same as before.                    
+
+## Share  
+
+It is time to visualise our findings to vividly demonstrate differences on riding patterns between different rider types.  
+
+**1. Members ride more often than non-members**  
+
+Look at the pie chart below, showing the discrepancy on numbers of rides by rider type.
+
+
+```{r pie_trips1}
+library(scales)
+dt_all02 %>% 
+  group_by(member_casual) %>% 
+  count() %>% 
+  ungroup() %>% 
+  ggplot(aes(x = "", y = n, fill = member_casual))+
+  geom_col()+
+  geom_text(aes(label = member_casual), position = position_stack(vjust = 0.5)) +
+  labs(title = "Number of Trips by Rider Type")+
+  guides(fill = guide_legend(title = "Rider Type"))+
+  coord_polar("y")
+```
+
+```{r pie_trips2}
+dt_all02 %>% 
+  group_by(member_casual) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = n/sum(n)) %>% 
+  mutate(labels = scales::percent(perc)) %>% 
+  ggplot(aes(x = "", y = perc, fill = member_casual))+
+  geom_col()+
+  geom_text(aes(label = labels), position = position_stack(vjust = 0.5)) +
+  labs(title = "Number of Trips by Rider Type")+
+  guides(fill = guide_legend(title = "Rider Type"))+
+  coord_polar("y")
+```
+
+
+
+```{r rides_bar, echo=FALSE}
+dt_all02 %>% 
+  group_by(member_casual, start_wday) %>% 
+  summarise(number_of_rides = n(), total_length = sum(ride_length_m), mean_length = mean(ride_length_m)) %>% 
+  arrange(member_casual, start_wday) %>% 
+  ggplot(aes(x = start_wday, y = number_of_rides, 
+             fill = member_casual)) + 
+  geom_col(position = "dodge")
+```
+
+```{r length_bar, echo=FALSE}
+dt_all02 %>% 
+  group_by(member_casual, start_wday) %>% 
+  summarise(number_of_rides = n(), total_length = sum(ride_length_m), mean_length = mean(ride_length_m)) %>% 
+  arrange(member_casual, start_wday) %>% 
+  ggplot(aes(x = start_wday, y = mean_length, 
+             fill = member_casual)) + 
+  geom_col(position = "dodge")
+```
+

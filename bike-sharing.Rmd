@@ -1,5 +1,5 @@
 ---
-title: "Google Data Analytics Certificate - Bike Share Case Study"
+title: "Google Data Analytics Certificate - Bike Share Case Study - Part1"
 author: "K.Wan"
 date: "2022/3/28"
 output: github_document
@@ -207,7 +207,8 @@ dt_all02 <- dt_all %>%
 
 `r format(nrow_new - nrow(dt_all02), big.mark=",", scientific=FALSE)` records removed.
 
-Meanwhile, rides that started or ended at DIVVY CASSETTE *REPAIR* MOBILE STATION or HUBBARD ST BIKE *CHECKING* (LBS-WH-TEST)  or WATSON *TESTING* DIVVY could be ignored as these are administrative stations. were removed as these are administrative stations. (Link for reference: <https://vibrantoutlook.wordpress.com/2021/09/19/google-data-analytics-certificate-capstone-project/>)  
+Meanwhile, rides that started or ended at DIVVY CASSETTE *REPAIR* MOBILE STATION or HUBBARD ST BIKE *CHECKING* (LBS-WH-TEST)  or WATSON *TESTING* DIVVY could be removed as these are administrative stations.  
+(Link for reference:<https://vibrantoutlook.wordpress.com/2021/09/19/google-data-analytics-certificate-capstone-project/>)  
 
 For brevity, I use `str_detect()` to find matches containing any characters of `REPAIR`, `TESTING` or `CHECKING`.
 
@@ -246,6 +247,12 @@ dt_all02 <- dt_all02 %>%
 
 At the end of data cleaning, `r format(old_records-nrow(dt_all02), big.mark = ",", scientific = FALSE)` rows have been deleted, accounting for `r paste0((round((old_records-nrow(dt_all02))/old_records, digits=2))*100, "%")` of original data size.
 
+Alternatively, I decide to export the cleaned data as a new csv file and document the following process of analysing and visualisation directly on the new file.
+
+```{r data_export}
+write_csv(dt_all02, file = "cleaned_data.csv")
+```
+
 
 ## Analyse
 
@@ -255,84 +262,87 @@ Here comes the first question: How many observations fall under each user type?
 (dt_all_freq <- dt_all02 %>% 
   count(member_casual))
 ```
-As shown above, more than `r dt_all_freq[2,2]-dt_all_freq[1,2]` rides were by members than casual riders in the whole time period.
+As shown above, more than `r format(dt_all_freq[2,2]-dt_all_freq[1,2], big.mark = ",", scientific = FALSE)` rides were by members than casual riders in the whole time period. 
 
 Then, I conduct descriptive analysis on **ride length**, answering questions like:  
 
-> Is there a difference on total/average ride lengths among the two user groups?  
-> How is that difference varied on monthly/daily level?
-
-**1. Total ride lengths**  
-
-Let's have a look at the total, average, median, minimum and maximum.
-
-```{r total length}
-dt_all02 %>% 
-  group_by(member_casual) %>% 
-  summarise(number_of_rides = n(),
-            total_length = sum(ride_length_m), 
-            mean_length = mean(ride_length_m),
-            median_length = median(ride_length_m), 
-            max_length = max(ride_length_m), 
-            min_length = min(ride_length_m))
-```
-Overall, more rides were taken by members while casual riders enjoyed longer trips, contributing nearly double the total ride length of members' during the same time period.  
-
-The average duration of each ride by casual riders is around `r dt_all02 %>% filter(member_casual=='casual') %>% summarise(mean_length_casual=mean(ride_length_m)) %>% round(digits=1)` minutes, two times more of the `r dt_all02 %>% filter(member_casual=='member') %>% summarise(mean_length_member=mean(ride_length_m)) %>% round(digits=1)` minutes for annual members.
+> Is there a difference on total/average ride lengths among the two user groups?   
+> How is that difference varied on monthly/daily level? 
 
 
-**2. Ride length by month**
+**1. Total ride lengths**   
 
-```{r month}
-dt_all02 %>% 
-  group_by(member_casual, start_Month) %>% 
-  summarise(sum_length_m = sum(ride_length_m), 
-            mean_length_m = mean(ride_length_m)) %>%
-  arrange(member_casual, start_Month) %>% 
-  head(12)
-```
+Let's have a look at the total, average, median, minimum and maximum. 
 
-It seems like the second quarter (April, May & June) to be a period that has experienced relatively longer duration of rides by casual riders.
+```{r total length} 
+ dt_all02 %>%  
+   group_by(member_casual) %>%  
+   summarise(number_of_rides = n(), 
+             total_length = sum(ride_length_m),  
+             mean_length = mean(ride_length_m), 
+             median_length = median(ride_length_m),  
+             max_length = max(ride_length_m),  
+             min_length = min(ride_length_m)) 
+``` 
 
+Overall, more rides were taken by members while casual riders enjoyed longer trips, contributing nearly double the total ride length of members' during the same time period.   
 
-**3. Which day of a week induced most traffic**
-
-See the number of trips and average ride duration on each day of a week for all users.
-```{r weekday}
-dt_all02 %>% 
-  group_by(start_wday) %>% 
-  summarise(number_of_rides = n(), 
-            total_length = sum(ride_length_m), 
-            mean_length = mean(ride_length_m))
-```
-
-Compare ridership, average ride length by weekday for members vs casual riders.
-
-```{r weekday_type}
-dt_all02 %>% 
-  group_by(member_casual, start_wday) %>% 
-  summarise(number_of_rides = n(), 
-            total_length = sum(ride_length_m), 
-            mean_length = mean(ride_length_m)) %>% 
-  arrange(member_casual, start_wday) 
-```
-
-Regardless of the user type, weekends undoubtedly enjoyed peak usage, which can possibly guide us in deciding marketing times.  
+The average duration of each ride by casual riders is around `r dt_all02 %>% filter(member_casual=='casual') %>% summarise(mean_length_casual=mean(ride_length_m)) %>% round(digits=1)` minutes, two times more of the `r dt_all02 %>% filter(member_casual=='member') %>% summarise(mean_length_member=mean(ride_length_m)) %>% round(digits=1)` minutes for annual members. 
 
 
-**4. Top 10 busiest stations**
+**2. Ride length by month** 
 
-To better market membership of Divvy, hence attracting more casual riders to subscribe as members, stations mostly visited by casual users may be a great choice as locations for the upcoming campaign.
+```{r month} 
+ dt_all02 %>%  
+   group_by(member_casual, start_Month) %>%  
+   summarise(sum_length_m = sum(ride_length_m),  
+             mean_length_m = mean(ride_length_m)) %>% 
+   arrange(member_casual, start_Month) %>%  
+   head(12) 
+``` 
 
-```{r hotspot01}
-dt_all02 %>% 
-  filter(member_casual == "casual") %>% 
-  group_by(start_station_id) %>% 
-  summarise(n = n()) %>% 
-  arrange(desc(n)) %>% 
-  select(start_station_id, n) %>% 
-  head(10)
-```
+ It seems like the second quarter (April, May & June) to be a period that has experienced relatively longer duration of rides by casual riders. 
+
+
+**3. Which day of a week induced most traffic** 
+
+See the number of trips and average ride duration on each day of a week for all users. 
+
+```{r weekday} 
+ dt_all02 %>%  
+   group_by(start_wday) %>%  
+   summarise(number_of_rides = n(),  
+             total_length = sum(ride_length_m),  
+             mean_length = mean(ride_length_m)) 
+``` 
+
+Compare ridership, average ride length by weekday for members vs casual riders. 
+
+```{r weekday_type} 
+ dt_all02 %>%  
+   group_by(member_casual, start_wday) %>%  
+   summarise(number_of_rides = n(),  
+             total_length = sum(ride_length_m),  
+             mean_length = mean(ride_length_m)) %>%  
+   arrange(member_casual, start_wday)  
+``` 
+
+Regardless of the user type, weekends undoubtedly enjoyed peak usage, which can possibly guide us in deciding marketing times.   
+
+
+**4. Top 10 busiest stations** 
+
+To better market membership of Divvy, hence attracting more casual riders to subscribe as members, stations mostly visited by casual users may be a great choice as locations for the upcoming campaign. 
+
+```{r hotspot01} 
+dt_all02 %>%  
+   filter(member_casual == "casual") %>%  
+   group_by(start_station_id) %>%  
+   summarise(n = n()) %>%  
+   arrange(desc(n)) %>%  
+   select(start_station_id, n) %>%  
+   head(10) 
+``` 
 
 Is there any difference on station preference between casual riders and annual members?
 
