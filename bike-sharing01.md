@@ -1,4 +1,4 @@
-Google Data Analytics Certificate - Bike Share Case Study - Part1
+Google Data Analytics Certificate - Bike Share Case Study - Part 1
 ================
 K.Wan
 2022/3/28
